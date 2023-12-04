@@ -18,7 +18,13 @@ class Auditor:
 		operating mode
 		'''
 		# Runs the subprocess command to get the output from iwconfig in string format
-		ifaces = subprocess.run(["iwconfig"], capture_output=True, text=True)
+		# Try to run the following command and handle any errors
+		try:
+			ifaces = subprocess.run(["iwconfig"], capture_output=True, text=True, check=True)
+		except Exception as e:
+			print("Something went wrong!\nExiting...")
+			print(e.stderr)
+			sys.exit()
 
 		# Checks if there is a wifi interface available, if not it will exit
 		if ifaces.stdout == "":
@@ -65,6 +71,52 @@ class Auditor:
 				else:
 					self.iface = iface_info[0][0]
 					self.iface_mode = iface_info[0][1]
+
+	def start_mon_mode(self):
+		'''
+		For the majority of the auditing tasks, the device 
+		should be in monitor mode. This method will change the 
+		operating mode of the device. 
+		'''
+		# First check if the device is already in monitor mode
+		mon_active = True if self.iface_mode == "Monitor" else False
+
+		# If the device isn't in monitor mode do the following.
+		if not mon_active:
+
+			# Check if the device supports monitor mode.
+			dev_supports_mon = self.supports_mon()
+
+			# If it does change it to monitor mode otherwise print the message
+			# and exit.
+			if dev_supports_mon: 
+				print(f"Changing Mode from --> {self.iface_mode} Mode\nChanging Mode To   --> Monitor Mode")
+
+				# Try to run the following command and handle any errors
+				try:
+					activate_mon_mode = subprocess.run(['airmon-ng', 'check', 'kill'], check=True)
+				except Exception as e:
+					# Catch any exception that the following command throws.
+					# Print the exception and exit.
+					print("Something went wrong!")
+					print(e.stderr)
+					sys.exit()
+
+				# Try to run the following command and handle any errors
+				try:
+					activate_mon_mode = subprocess.run(['airmon-ng', 'start', f'{self.iface}'], capture_output=True, text=True, check=True)
+				except Exception as e:
+					# Catch any exception that the following command throws.
+					# Print the exception and exit.
+					print("Something went wrong!\n")
+					print(e.stderr)
+					sys.exit()
+				else:
+					print(activate_mon_mode.stdout)
+
+			else:
+				print("Device Doesn't Support Monitor Mode...\n Exiting")
+				sys.exit()
 
 	def wifi_area_scan(self):
 		'''
@@ -169,9 +221,27 @@ class Auditor:
 				time.sleep(3)
 				continue
 
+	def supports_mon(self):
+		'''
+		Helper function to check if the device supports monitor mode.
+		'''
+		# Try to run the following command and handle any errors
+		try:
+			mon_allowed = subprocess.run(['iw', 'list'], capture_output=True, text=True, check=True)
+		except Exception as e:
+			print("Something went wrong!\nExiting...")
+			print(e.stderr)
+			sys.exit()
+		
+		# Return true '* monitor' otherwise return false
+		if '* monitor' in mon_allowed.stdout:
+			return True
+		else:
+			return False
+
 	def clear_term(self):
 		'''
-		Function to clear the terminal output.
+		Helper function to clear the terminal output.
 		'''
 		subprocess.run(["clear"])
 
@@ -196,5 +266,5 @@ class Auditor:
 
 
 wlan0interface = Auditor("wlan0", "Mananged")
-wlan0interface.banner_print()
-wlan0interface.options_list()
+wlan0interface.start_mon_mode()
+
