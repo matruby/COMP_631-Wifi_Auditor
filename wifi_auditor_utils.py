@@ -123,7 +123,38 @@ class Auditor:
 		Scan for Wi-Fi Networks in the Surrounding Area
 		'''
 		self.clear_term()
-		print("Scanning")
+		# Run the airodump command with subprocess and catch any errors.
+		try:
+			subprocess.run(['airodump-ng', f'{self.iface}'], check=True)
+		except subprocess.CalledProcessError as e:
+			print("An Error was raised!\nExiting...")
+			sys.exit()
+
+		# Catch the error caused by the user exiting the program
+		except KeyboardInterrupt:
+			# Prompt the user to contiue if they'd like.
+			while True:
+				print("\n--------- Continue Using Wi-Fi Auditor Tool (Y|n) ---------")
+				keep_auditing = input("--> ")
+
+				# Handle the possible inputs
+				if not keep_auditing.strip():
+					print("\n\n")
+					self.options_list()
+					break
+
+				elif keep_auditing.lower() == 'y':
+					print("\n\n")
+					self.options_list()
+					break
+
+				elif keep_auditing.lower() == 'n':
+					print("\n!! Have a good day !!")
+					sys.exit()
+
+				else:
+					print(f"\n!!Invalid Option '{keep_auditing}'!!")
+					continue
 
 	def wpa2_crack_attack(self):
 		'''
@@ -266,5 +297,5 @@ class Auditor:
 
 
 wlan0interface = Auditor("wlan0", "Mananged")
-wlan0interface.start_mon_mode()
+wlan0interface.options_list()
 
