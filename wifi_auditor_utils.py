@@ -12,7 +12,7 @@ class Auditor:
 	"ap_channel": "157",
 	"ap_bssid": "36:cf:f6:f2:fb:34",
 	"ap_ssid": "",
-	"eapol_cap_name": "/home/matt_school/Desktop/eapol-capture",
+	"eapol_cap_name": "/home/matt_school/Desktop/eapol_packets",
 	"dict_file": "/usr/share/wordlists/john.lst"
 	}
 
@@ -131,7 +131,9 @@ class Auditor:
 		'''
 		Scan for Wi-Fi Networks in the Surrounding Area
 		'''
+		# Clear the terminal output
 		self.clear_term()
+
 		# Run the airodump command with subprocess and catch any errors.
 		try:
 			subprocess.run(['airodump-ng', f'{self.iface}'], check=True)
@@ -147,6 +149,22 @@ class Auditor:
 		'''
 		Perform a WPA2 Cracking Attack.
 		'''
+		# Define the required options to be set for this attack
+		req_opts = {
+		"ap_channel"     : 1,
+		"ap_bssid"       : 1,
+		"ap_ssid"        : 0,
+		"eapol_cap_name" : 1,
+		"dict_file"      : 1,
+		}
+
+		# Show the current required options and prompt them to
+		# settings change the required
+		self.choose_option(req_opts)
+
+		# Before running the attack make sure the option requirements are set
+		#if self.requirements_satisified(req_opts):
+
 		# Create the listener for capturing EAPOL packets
 		listener_proc = self.create_listener()
 
@@ -162,6 +180,8 @@ class Auditor:
 
 		# Crack the password from the captured EAPOL packets
 		self.create_cracker()
+	#else:
+	#		self.select_attack()
 
 	def auth_flood():
 		'''
@@ -192,7 +212,7 @@ class Auditor:
 		self.clear_term()
 		print("Spamming...")
 
-	def options_list(self):
+	def select_attack(self):
 		'''
 		Print out a list of options for the users to choose from
 		'''
@@ -286,12 +306,12 @@ class Auditor:
 			# Handle the possible inputs
 			if not keep_auditing.strip():
 				print("\n\n")
-				self.options_list()
+				self.select_attack()
 				break
 
 			elif keep_auditing.lower() == 'y':
 				print("\n\n")
-				self.options_list()
+				self.select_attack()
 				break
 
 			elif keep_auditing.lower() == 'n':
@@ -337,7 +357,7 @@ class Auditor:
 		"aircrack-ng",
 		"-w", f"{self.options['dict_file']}",
 		"-b", f"{self.options['ap_bssid']}",
-		f"/home/matt_school/Desktop/eapol-capture-01.cap",
+		f"{self.options['eapol_cap_name']}",
 		]
 
 		try:
@@ -376,6 +396,148 @@ class Auditor:
 
 		return deauth_proc
 
+	def show_options(self, req_opts):
+		'''
+		Display the values in the options dictionary
+		'''
+		print("......... CURRENT OPTIONS ...........")
+		# Loop through the currently set options
+
+		counter = 0
+		for option in self.options.items():
+			counter += 1
+
+			# Don't print this line on the first option
+			print("-" * 36)
+			print(f"Option Name          --> {option[0]}")
+
+			# If there's no value it will say un_set, otherwise give the option value
+			if not option[1]:
+				print("Option Value         --> not_set")
+			else:
+				print(f"Option Value         --> {option[1]}")
+
+			# Tell the user if the option is required or not
+			print(f"Required for Command --> ", end="")
+			print("yes") if req_opts[option[0]] == 1 else print("no")
+			print("-" * 36)
+
+	def choose_option(self, req_opts):
+		'''
+		Prompt the user to change an option.
+		'''
+		usage_statement = """
+____________COMMANDS____________
+ 1. set
+ 2. run
+ 3. quit
+--------------------------------
+
+_____________SYNTAX_____________
+--> set option_name option_value
+--> run
+--> quit
+--------------------------------
+
+**** ALL COMMANDS ARE CASE INSENSITIVE ****
+		"""
+
+
+		while True:
+			#  Clear the terminal on each loop
+			self.clear_term()
+
+			# Print out the list of currently set options
+			self.show_options(req_opts)
+
+			# Print the usage statement to tell the user how to run commands
+			print(usage_statement)
+
+
+			# Display the list of options to set
+			print("Set an option | Run the attack | Quit the program")
+			option_choice = input("--> ")
+
+			# Clean the user input
+			sanitized_input = self.option_cmd_parser(option_choice)
+
+			# If the santized input was correct
+			if isinstance(sanitized_input, list):
+
+				# Check if the option chosen is valid
+				if sanitized_input[0] in self.options:
+					# Set the valid option
+					print(f"\nSetting --- {sanitized_input[0]} --- to --- {sanitized_input[1]}")
+					self.options[sanitized_input[0]] = sanitized_input[1]
+					continue
+				else:
+					continue
+					print("Invalid Option")
+
+			# Check if the user wants to run the command
+			elif sanitized_input == 'run':
+				break
+			elif sanitized_input == 'quit':
+				# If this command is passed exit the script
+				print("\nHave a good day!!")
+				sys.exit()
+				break
+
+
+
+	def option_cmd_parser(self, user_input):
+		'''
+		Takes in the users input and ensures its valid
+		for setting the desired option.
+		'''
+
+		# Split the user_input string into a list
+		option_cmds = user_input.split()
+
+		# Check if the user_input contained the word 'set'
+		if 'set' in option_cmds[0].lower() and len(option_cmds) == 3:
+
+			# Do a case insensitive search to find if the command is formatted properly
+			if option_cmds[0].lower() == 'set' and option_cmds[1].lower() in self.options.keys():
+				# Return the option_name and option_value1
+				return [option_cmds[1].lower(), option_cmds[2]]
+
+			# Otherwise return improper option_name or command name
+			else:
+				# Clear the terminal and print the error message
+				self.clear_term()
+				print(f'**** Bad Command Format ****\nFailed Command --> {user_input}\n**** Retry Command ****')
+				time.sleep(4)
+				return None
+
+		elif 'run' in option_cmds[0].lower() and len(option_cmds) == 1:
+			return 'run'
+
+		elif 'quit' in option_cmds[0].lower() and len(option_cmds) == 1:
+			return 'quit'
+
+		else:
+			# Clear the terminal and print the error message
+			self.clear_term()
+			print("**** BAD COMMAND PASSED ****")
+			time.sleep(3)
+			return None
+
+	def requirements_satisfied(self, req_opts):
+		'''
+		Before it runs the command it will check if all the 
+		requirements are set
+		'''
+		for option in self.options.items():
+			# Check the option requirements to see if the value is given
+			if req_opts[option[0]] == 1 and not option[1]:
+				self.clear_term()
+				print(f"Option Value for option[1] Option Needs to be set\nSet it then run the attack")
+				time.sleep(3)
+				return False
+
+		# If the options are all set properly proceed
+		return True
 
 	def banner_print(self):
 		'''
@@ -397,6 +559,16 @@ class Auditor:
 		print("----------------------------------------------------------------------------------")
 
 
-wlan0interface = Auditor("wlan0", "Mananged")
-wlan0interface.options_list()
+options = {
+"ap_channel": "",
+"ap_bssid": "",
+"ap_ssid": "",
+"eapol_cap_name": "",
+"dict_file": ""
+}
+
+wlan0interface = Auditor('wlan0', 'Monitor')
+wlan0interface.select_attack()
+
+
 
