@@ -10,8 +10,8 @@ import time
 class Auditor:
 	# Options list for the Auditor class
 	options = {
-	"ap_channel"          : "157",
-	"ap_bssid"            : "36:cf:f6:f2:fb:34",
+	"ap_channel"          : "149",
+	"ap_bssid"            : "f6:49:48:d0:b3:6a",
 	"ap_ssid"             : "",
 	"eapol_file_path"     : "",
 	"eapol_file_name"     : "",
@@ -134,19 +134,20 @@ class Auditor:
 		'''
 		Scan for Wi-Fi Networks in the Surrounding Area
 		'''
-		# Clear the terminal output
-		self.clear_term()
+		if self.iface and self.iface_mode == 'Monitor':
+			# Clear the terminal output
+			self.clear_term()
 
-		# Run the airodump command with subprocess and catch any errors.
-		try:
-			subprocess.run(['airodump-ng', f'{self.iface}'], check=True)
-		except subprocess.CalledProcessError as e:
-			print("An Error was raised!\nExiting...")
-			sys.exit()
+			# Run the airodump command with subprocess and catch any errors.
+			try:
+				subprocess.run(['airodump-ng', f'{self.iface}'], check=True)
+			except subprocess.CalledProcessError as e:
+				print("An Error was raised!\nExiting...")
+				sys.exit()
 
-		# Catch the error caused by the user exiting the program
-		except KeyboardInterrupt:
-			self.keep_running()
+			# Catch the error caused by the user exiting the program
+			except KeyboardInterrupt:
+				self.keep_running()
 
 	def wpa2_cracking_attack(self):
 		'''
@@ -215,32 +216,158 @@ class Auditor:
 					self.select_attack()
 					break
 
-
-
 			# Crack the password from the captured EAPOL packets
 			self.create_cracker()
 
-	def auth_flood():
+	def auth_flood(self):
 		'''
 		Perform a Wi-Fi Authentication Flood
 		'''
+		# Clear the Terminal before starting this command
 		self.clear_term()
-		print("Flooding...")
 
-	def deauth_attack():
+		# Give the required outputs for deauth_attack
+		req_opts = {
+		"ap_channel"      : 1,
+		"ap_bssid"        : 1,
+		"ap_ssid"         : 0,
+		"eapol_file_path" : 0,
+		"eapol_file_name" : 0,
+		"eapol_save_path" : 0,
+		"dict_file"       : 0,
+		}
+
+		# Auth command that will be passed into subprocess
+		auth_flood_cmd = [
+		"mdk4", 
+		f"{self.iface}",
+		"a", 
+		"-a", 
+		f"{self.options['ap_bssid']}",
+		]
+
+
+		# Allow the user to choose their desired options
+		self.choose_option(req_opts)
+
+		# Make sure the requirements of the command are satisfied before it is run
+		if not self.requirements_satisfied(req_opts):
+			self.choose_options(req_opts)
+
+		# Run the command
+		try:
+			a_flood_proc = subprocess.run(auth_flood_cmd)
+		except subprocess.CalledProcessError as e:
+			print("\n**** Something went wrong!! ****")
+
+		except KeyboardInterrupt:
+			self.clear_term()
+			print("\n\n**** Program Stopped By User ****")
+			self.keep_running()
+
+
+	def deauth_attack(self):
 		'''
 		Perform a Wi-Fi De-Authentication Attack
 		'''
+		# Clear the terminal
 		self.clear_term()
-		print("Deauthing...")
+
+		# Required options for the deauth command
+		req_opts = {
+		"ap_channel"      : 1,
+		"ap_bssid"        : 1,
+		"ap_ssid"         : 0,
+		"eapol_file_path" : 0,
+		"eapol_file_name" : 0,
+		"eapol_save_path" : 0,
+		"dict_file"       : 0,
+		}
 
 
-	def beacon_flood():
+		# List for all of the options of the aireplay command.
+		deauth_cmd = [
+		"aireplay-ng",
+		"-0", "0",
+		"-a", f"{self.options['ap_bssid']}",
+		f"{self.iface}",
+		]
+
+		# Allow the user to choose their desired options
+		self.choose_option(req_opts)
+
+		# Make sure the requirements of the command are satisfied before it is run
+		if not self.requirements_satisfied(req_opts):
+			self.choose_options(req_opts)
+
+		try:
+			# Run the command to change the channel
+			self.change_channel()
+			# Run the deauthentication command
+			subprocess.run(deauth_cmd)
+
+		# Catch the error and as if they want to keep running
+		except subprocess.CalledProcessError as e:
+			self.clear_term()
+			print("\n**** Something went wrong!! ****")
+			self.keep_running()
+
+		except KeyboardInterrupt:
+			self.clear_term()
+			print("\n\n**** Program Stopped By User ****")
+			self.keep_running()
+
+
+
+	def beacon_flood(self):
 		'''
 		Perform a Wi-Fi Beacon Flood Attack
 		'''
+		# Clear the Terminal before starting this command
 		self.clear_term()
-		print("Beacon Flooding...")
+
+		# Give the required outputs for deauth_attack
+		req_opts = {
+		"ap_channel"      : 1,
+		"ap_bssid"        : 0,
+		"ap_ssid"         : 1,
+		"eapol_file_path" : 0,
+		"eapol_file_name" : 0,
+		"eapol_save_path" : 0,
+		"dict_file"       : 0,
+		}
+
+		# Auth command that will be passed into subprocess
+		beacon_flood_cmd = [
+		"mdk4", 
+		f"{self.iface}",
+		"b",
+		"-n",
+		f"{self.options['ap_ssid']}",
+		"-c",
+		f"{self.options['ap_channel']}",
+		]
+
+
+		# Allow the user to choose their desired options
+		self.choose_option(req_opts)
+
+		# Make sure the requirements of the command are satisfied before it is run
+		if not self.requirements_satisfied(req_opts):
+			self.choose_option(req_opts)
+
+		# Run the command
+		try:
+			b_flood_proc = subprocess.run(beacon_flood_cmd)
+		except subprocess.CalledProcessError as e:
+			print("\n**** Something went wrong!! ****")
+
+		except KeyboardInterrupt:
+			self.clear_term()
+			print("\n\n**** Program Stopped By User ****")
+			self.keep_running()
+
+
 
 	def layer_1_dos():
 		'''
@@ -406,7 +533,7 @@ class Auditor:
 		# If subprocess gives this error exit
 		except Exception as e:
 			print(e)
-			print("Something went wrong!!")
+			print("**** Something went wrong!! ****")
 			sys.exit()
 
 		return listener_proc
@@ -483,26 +610,48 @@ class Auditor:
 		Display the values in the options dictionary
 		'''
 		print("......... CURRENT OPTIONS ...........")
-		# Loop through the currently set options
+		# Loop through all of the currently set options
+		if show_all:
+			counter = 0
+			for option in self.options.items():
+				counter += 1
 
-		counter = 0
-		for option in self.options.items():
-			counter += 1
+				# Don't print this line on the first option
+				print("-" * 36)
+				print(f"Option Name          --> {option[0]}")
 
-			# Don't print this line on the first option
+				# If there's no value it will say un_set, otherwise give the option value
+				if not option[1]:
+					print("Option Value         --> not_set")
+				else:
+					print(f"Option Value         --> {option[1]}")
+
+				# Tell the user if the option is required or not
+				print(f"Required for Command --> ", end="")
+				print("yes") if req_opts[option[0]] == 1 else print("no")
+				print("-" * 36)
+		else:
+			counter = 0
+
+			# Print out what the current interface and mode are
+			print(f"Selected Interface --> {self.iface}")
+			print(f"Current Interface Mode --> {self.iface_mode}")
 			print("-" * 36)
-			print(f"Option Name          --> {option[0]}")
 
-			# If there's no value it will say un_set, otherwise give the option value
-			if not option[1]:
-				print("Option Value         --> not_set")
-			else:
-				print(f"Option Value         --> {option[1]}")
+			# Only print out required options
+			for option in self.options.items():
+				counter += 1
+				# Only print the option_name and current value if its required
+				if req_opts[option[0]] == 1:
+					print("-" * 36)
+					print(f"Option Name          --> {option[0]}")
 
-			# Tell the user if the option is required or not
-			print(f"Required for Command --> ", end="")
-			print("yes") if req_opts[option[0]] == 1 else print("no")
-			print("-" * 36)
+					# If there's no value it will say un_set, otherwise give the option value
+					if not option[1]:
+						print("Option Value         --> not_set")
+					else:
+						print(f"Option Value         --> {option[1]}")
+
 
 	def choose_option(self, req_opts):
 		'''
@@ -565,6 +714,9 @@ _____________SYNTAX_____________
 				sys.exit()
 				break
 
+			elif sanitized_input == 'all':
+				self.show_options(req_opts, show_all=True)
+
 
 
 	def option_cmd_parser(self, user_input):
@@ -599,6 +751,9 @@ _____________SYNTAX_____________
 		elif 'quit' in option_cmds[0].lower() and len(option_cmds) == 1:
 			return 'quit'
 
+		elif option_cmds[0].lower() == 'show' and option_cmds[1].lower() == 'all':
+			return 'all'
+
 		else:
 			# Clear the terminal and print the error message
 			self.clear_term()
@@ -618,10 +773,10 @@ _____________SYNTAX_____________
 				print(f"Option Value for {option[0]} Option Needs to be set\nSet it then run the attack")
 				time.sleep(3)
 				return False
+
+		# If all options are set propery proceed
 		return True
 
-		# If the options are all set properly proceed
-		return True
 
 	def unique_eapol_name(self, base_filename, save_dir):
 		'''
@@ -636,7 +791,7 @@ _____________SYNTAX_____________
 			# Bring up the options again
 			self.choose_option()
 
-		# User might not add the trailing /
+		# User might not add the trailing / to the directory name
 		if save_dir[-1] != '/':
 			save_dir = save_dir + '/'
 
@@ -713,13 +868,39 @@ _____________SYNTAX_____________
 				time.sleep(2)
 
 		# Check that the dictonary file exists
-		if option_lst[1].lower() == 'dict_file':
+		if opt_lst[1].lower() == 'dict_file':
 			if os.path.exists(opt_lst[2]):
 				return [opt_lst[1].lower(), opt_lst[2]]
 			else:
 				self.clear_term()
 				print("**** Invalid Dictionary File ****")
 				time.sleep(2)
+
+		if opt_lst[1].lower() == 'ap_ssid':
+			return [opt_lst[1].lower(), opt_lst[2]]
+
+	def change_channel(self):
+		'''
+		Change the wireless interfaces channel to 
+		the desired channel.
+		'''
+		# Command to change the wireless interface channel
+		iface_change_cmd = [
+		"iwconfig",
+		f"{self.iface}",
+		"channel",
+		f"{self.options['ap_channel']}",
+		]
+
+		# Try to run the command return an error if not
+		try:
+			# Run the command to change the interfaces channel
+			print(f"**** Channel Changed to {self.options['ap_channel']} ****")
+			subprocess.run(iface_change_cmd)
+		except subprocess.CalledProcessError as e:
+			print("\n**** Something went wrong!! ****")
+			self.keep_running()
+
 
 
 	def banner_print(self):
